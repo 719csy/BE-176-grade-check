@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BE 176 Grade Check</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="lookup-panel" aria-labelledby="page-title">
+        <div class="intro">
+          <p class="course">BIOENGR 176</p>
+          <h1 id="page-title">Grade Check</h1>
+          <p class="subtitle">Enter your SIS User ID or SIS Login ID to view your discussion scores.</p>
+        </div>
+
+        <form id="lookup-form" class="lookup-form" autocomplete="off">
+          <label for="identifier">SIS User ID or SIS Login ID</label>
+          <div class="input-row">
+            <input
+              id="identifier"
+              name="identifier"
+              type="text"
+              inputmode="email"
+              placeholder="UID or email"
+              aria-describedby="form-message"
+              required
+            />
+            <button type="submit">Check</button>
+          </div>
+          <p id="form-message" class="message" role="status" aria-live="polite"></p>
+        </form>
+      </section>
+
+      <section id="result-panel" class="result-panel" hidden aria-labelledby="result-title">
+        <div class="result-heading">
+          <div>
+            <p class="course">Your Results</p>
+            <h2 id="result-title">Discussion Scores</h2>
+          </div>
+          <button id="clear-button" type="button" class="secondary-button">Clear</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Assignment</th>
+                <th scope="col">Score</th>
+              </tr>
+            </thead>
+            <tbody id="result-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

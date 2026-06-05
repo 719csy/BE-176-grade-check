@@ -1,0 +1,15 @@
+{
+  "name": "be-176-grade-check",
+  "version": "1.0.0",
+  "description": "Private BE 176 grade lookup site.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=20"
+  },
+  "private": true
+}
