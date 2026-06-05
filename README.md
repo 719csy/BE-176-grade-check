@@ -27,3 +27,12 @@ Open `http://localhost:3000`.
 Do not deploy this as a GitHub Pages-only static site because static files are public to the browser. Deploy it to a Node-capable host and provide the CSV privately through server storage or environment-mounted storage.
 
 This project has no runtime npm dependencies. Many Node hosts will still run `npm start` automatically.
+
+## GitHub Setup
+
+Create an empty private repository named `BE-176-grade-check`, then push this local repository:
+
+```bash
+git remote add origin https://github.com/719csy/BE-176-grade-check.git
+git push -u origin main
+```
