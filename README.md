@@ -1,6 +1,6 @@
 # BE 176 Grade Check
 
-A small private grade lookup site for BE 176. Students can search by either `SIS User ID` or `SIS Login ID`, and the server returns only that student's grade columns from `G` through `U`.
+A small private grade lookup site for BE 176. Students can search by either `SIS User ID` or `SIS Login ID`, and the server returns only that student's grade columns after the `Section` column.
 
 ## Privacy Model
 

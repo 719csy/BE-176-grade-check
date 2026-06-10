@@ -13,8 +13,7 @@ const LOOKUP_COLUMNS = {
   email: "SIS Login ID"
 };
 
-const gradeStartIndex = 6; // Column G, zero-based.
-const gradeEndIndexExclusive = 21; // Column U is included.
+const gradeStartAfterColumn = "Section";
 const apiAttempts = new Map();
 
 let gradeRows = [];
@@ -110,9 +109,6 @@ function loadGrades() {
 
   const rows = parseCsv(fs.readFileSync(csvPath, "utf8"));
   const headers = rows[0] || [];
-  if (headers.length < gradeEndIndexExclusive) {
-    throw new Error("CSV does not contain the expected columns A through U.");
-  }
 
   const uidIndex = headers.indexOf(LOOKUP_COLUMNS.uid);
   const emailIndex = headers.indexOf(LOOKUP_COLUMNS.email);
@@ -120,7 +116,13 @@ function loadGrades() {
     throw new Error("CSV must include SIS User ID and SIS Login ID columns.");
   }
 
-  const gradeHeaders = headers.slice(gradeStartIndex, gradeEndIndexExclusive);
+  const sectionIndex = headers.indexOf(gradeStartAfterColumn);
+  if (sectionIndex === -1 || sectionIndex === headers.length - 1) {
+    throw new Error(`CSV must include ${gradeStartAfterColumn} followed by grade columns.`);
+  }
+
+  const gradeStartIndex = sectionIndex + 1;
+  const gradeHeaders = headers.slice(gradeStartIndex);
   gradeRows = rows.slice(1).map((row) => ({
     uid: normalize(row[uidIndex]),
     email: normalize(row[emailIndex]),
