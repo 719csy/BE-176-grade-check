@@ -117,6 +117,20 @@ function normalize(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function uclaEmailAliases(email) {
+  const normalizedEmail = normalize(email);
+  const match = normalizedEmail.match(/^([^@]+)@(g\.ucla\.edu|ucla\.edu)$/);
+  if (!match) {
+    return [normalizedEmail];
+  }
+
+  return [
+    normalizedEmail,
+    `${match[1]}@ucla.edu`,
+    `${match[1]}@g.ucla.edu`
+  ];
+}
+
 function loadGrades() {
   if (!fs.existsSync(csvPath)) {
     throw new Error(`CSV file not found at ${csvPath}`);
@@ -154,8 +168,10 @@ function lookup(identifier) {
   if (!normalizedIdentifier) {
     return null;
   }
+  const emailIdentifiers = new Set(uclaEmailAliases(normalizedIdentifier));
+
   return gradeRows.find(
-    (row) => row.uid === normalizedIdentifier || row.email === normalizedIdentifier
+    (row) => row.uid === normalizedIdentifier || emailIdentifiers.has(row.email)
   );
 }
 
