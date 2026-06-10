@@ -28,11 +28,11 @@ Do not deploy this as a GitHub Pages-only static site because static files are p
 
 This project has no runtime npm dependencies. Many Node hosts will still run `npm start` automatically.
 
-## GitHub Setup
+## GitHub Repository
 
-Create an empty private repository named `BE-176-grade-check`, then push this local repository:
+This local repository is connected to `https://github.com/719csy/BE-176-grade-check.git`.
+Push future tracked-code changes with:
 
 ```bash
-git remote add origin https://github.com/719csy/BE-176-grade-check.git
-git push -u origin main
+git push
 ```
