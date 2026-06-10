@@ -1,10 +1,10 @@
-const form = document.querySelector("#lookup-form");
-const input = document.querySelector("#identifier");
 const message = document.querySelector("#form-message");
 const resultPanel = document.querySelector("#result-panel");
 const resultBody = document.querySelector("#result-body");
 const clearButton = document.querySelector("#clear-button");
+const googleButton = document.querySelector("#google-signin-button");
 const apiBase = document.querySelector("meta[name='grade-api-base']")?.content.trim().replace(/\/$/, "") || "";
+const googleClientId = document.querySelector("meta[name='google-client-id']")?.content.trim() || "";
 
 function apiUrl(path) {
   const cleanPath = path.replace(/^\//, "");
@@ -33,31 +33,26 @@ function renderResults(grades) {
   resultPanel.hidden = false;
 }
 
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-
-  const identifier = input.value.trim();
-  if (!identifier) {
-    setMessage("Please enter your SIS User ID or SIS Login ID.", true);
+async function handleGoogleCredential(response) {
+  if (!response || !response.credential) {
+    setMessage("Google Sign-In did not return a credential.", true);
     return;
   }
 
-  const submitButton = form.querySelector("button[type='submit']");
-  submitButton.disabled = true;
-  setMessage("Checking...");
+  setMessage("Checking your UCLA Google account...");
   resultPanel.hidden = true;
   resultBody.replaceChildren();
 
   try {
-    const response = await fetch(apiUrl("api/lookup"), {
+    const apiResponse = await fetch(apiUrl("api/google-lookup"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ identifier })
+      body: JSON.stringify({ credential: response.credential })
     });
 
-    const contentType = response.headers.get("content-type") || "";
-    const payload = contentType.includes("application/json") ? await response.json() : {};
-    if (!response.ok) {
+    const contentType = apiResponse.headers.get("content-type") || "";
+    const payload = contentType.includes("application/json") ? await apiResponse.json() : {};
+    if (!apiResponse.ok) {
       throw new Error(payload.error || "Grade lookup service is not connected yet.");
     }
 
@@ -65,15 +60,40 @@ form.addEventListener("submit", async (event) => {
     setMessage(`Matched by ${payload.matchedBy}.`);
   } catch (error) {
     setMessage(error.message, true);
-  } finally {
-    submitButton.disabled = false;
   }
-});
+}
+
+function initializeGoogleSignIn() {
+  if (!googleClientId) {
+    setMessage("Google Sign-In is not configured yet.", true);
+    return;
+  }
+
+  if (!window.google || !window.google.accounts || !window.google.accounts.id) {
+    setMessage("Google Sign-In could not be loaded.", true);
+    return;
+  }
+
+  window.google.accounts.id.initialize({
+    client_id: googleClientId,
+    callback: handleGoogleCredential,
+    auto_select: false
+  });
+
+  window.google.accounts.id.renderButton(googleButton, {
+    theme: "outline",
+    size: "large",
+    type: "standard",
+    text: "continue_with",
+    shape: "rectangular",
+    width: 320
+  });
+}
+
+window.addEventListener("load", initializeGoogleSignIn);
 
 clearButton.addEventListener("click", () => {
-  input.value = "";
   resultBody.replaceChildren();
   resultPanel.hidden = true;
   setMessage("");
-  input.focus();
 });

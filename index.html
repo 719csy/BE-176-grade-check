@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="grade-api-base" content="" />
+    <meta name="google-client-id" content="" />
     <title>BE 176 Grade Check</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -19,23 +20,12 @@
         <div class="intro">
           <p class="course">BIOENGR 176</p>
           <h1 id="page-title">Grade Check</h1>
-          <p class="subtitle">Enter your SIS User ID or SIS Login ID to view your discussion scores.</p>
+          <p class="subtitle">Sign in with your UCLA Google account to view your discussion scores.</p>
         </div>
 
         <form id="lookup-form" class="lookup-form" autocomplete="off">
-          <label for="identifier">SIS User ID or SIS Login ID</label>
-          <div class="input-row">
-            <input
-              id="identifier"
-              name="identifier"
-              type="text"
-              inputmode="email"
-              placeholder="UID or email"
-              aria-describedby="form-message"
-              required
-            />
-            <button type="submit">Check</button>
-          </div>
+          <label>UCLA Google Sign-In</label>
+          <div id="google-signin-button" class="google-signin-button"></div>
           <p id="form-message" class="message" role="status" aria-live="polite"></p>
         </form>
       </section>
@@ -62,6 +52,7 @@
       </section>
     </main>
 
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="public/app.js"></script>
   </body>
 </html>

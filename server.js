@@ -1,6 +1,7 @@
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
+const crypto = require("crypto");
 
 loadEnvFile(path.join(__dirname, ".env"));
 
@@ -11,6 +12,12 @@ const allowedOrigins = (process.env.GRADE_CORS_ORIGIN || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+const googleClientId = process.env.GOOGLE_CLIENT_ID || "";
+const googleAllowedDomains = (process.env.GOOGLE_ALLOWED_DOMAINS || "ucla.edu,g.ucla.edu")
+  .split(",")
+  .map((domain) => normalize(domain))
+  .filter(Boolean);
+const allowManualLookup = process.env.ALLOW_MANUAL_LOOKUP === "true";
 
 const LOOKUP_COLUMNS = {
   uid: "SIS User ID",
@@ -22,6 +29,10 @@ const apiAttempts = new Map();
 
 let gradeRows = [];
 let loadedAt = null;
+let googleKeysCache = {
+  expiresAt: 0,
+  keys: []
+};
 
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) {
@@ -148,6 +159,97 @@ function lookup(identifier) {
   );
 }
 
+function decodeBase64Url(value) {
+  return Buffer.from(value.replace(/-/g, "+").replace(/_/g, "/"), "base64");
+}
+
+function decodeJwtJson(value) {
+  return JSON.parse(decodeBase64Url(value).toString("utf8"));
+}
+
+async function getGoogleKeys() {
+  if (googleKeysCache.expiresAt > Date.now() && googleKeysCache.keys.length > 0) {
+    return googleKeysCache.keys;
+  }
+
+  const response = await fetch("https://www.googleapis.com/oauth2/v3/certs");
+  if (!response.ok) {
+    throw new Error("Unable to fetch Google signing keys.");
+  }
+
+  const payload = await response.json();
+  const cacheControl = response.headers.get("cache-control") || "";
+  const maxAgeMatch = cacheControl.match(/max-age=(\d+)/);
+  const maxAgeSeconds = maxAgeMatch ? Number(maxAgeMatch[1]) : 3600;
+
+  googleKeysCache = {
+    expiresAt: Date.now() + maxAgeSeconds * 1000,
+    keys: payload.keys || []
+  };
+  return googleKeysCache.keys;
+}
+
+async function verifyGoogleCredential(credential) {
+  if (!googleClientId) {
+    throw new Error("Google Sign-In is not configured on the server.");
+  }
+
+  const parts = String(credential || "").split(".");
+  if (parts.length !== 3) {
+    throw new Error("Invalid Google credential.");
+  }
+
+  const [encodedHeader, encodedPayload, encodedSignature] = parts;
+  const header = decodeJwtJson(encodedHeader);
+  const payload = decodeJwtJson(encodedPayload);
+  if (header.alg !== "RS256" || !header.kid) {
+    throw new Error("Unsupported Google credential signature.");
+  }
+
+  const keys = await getGoogleKeys();
+  const jwk = keys.find((key) => key.kid === header.kid);
+  if (!jwk) {
+    googleKeysCache.expiresAt = 0;
+    throw new Error("Google signing key was not found.");
+  }
+
+  const verifier = crypto.createVerify("RSA-SHA256");
+  verifier.update(`${encodedHeader}.${encodedPayload}`);
+  verifier.end();
+  const publicKey = crypto.createPublicKey({ key: jwk, format: "jwk" });
+  const signatureValid = verifier.verify(publicKey, decodeBase64Url(encodedSignature));
+  if (!signatureValid) {
+    throw new Error("Google credential signature is invalid.");
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  if (payload.iss !== "accounts.google.com" && payload.iss !== "https://accounts.google.com") {
+    throw new Error("Google credential issuer is invalid.");
+  }
+  if (payload.aud !== googleClientId) {
+    throw new Error("Google credential audience is invalid.");
+  }
+  if (typeof payload.exp !== "number" || payload.exp <= now) {
+    throw new Error("Google credential has expired.");
+  }
+  if (payload.email_verified !== true) {
+    throw new Error("Google email is not verified.");
+  }
+
+  const email = normalize(payload.email);
+  const hostedDomain = normalize(payload.hd);
+  const emailDomainAllowed = googleAllowedDomains.some((domain) => email.endsWith(`@${domain}`));
+  const hostedDomainAllowed = googleAllowedDomains.includes(hostedDomain);
+  if (!emailDomainAllowed || !hostedDomainAllowed) {
+    throw new Error(`Please sign in with your UCLA Google account.`);
+  }
+
+  return {
+    email,
+    hostedDomain
+  };
+}
+
 function sendJson(req, res, status, payload) {
   const body = JSON.stringify(payload);
   res.writeHead(status, {
@@ -175,7 +277,7 @@ function corsHeaders(req) {
 function securityHeaders(req = {}) {
   return {
     "Content-Security-Policy":
-      "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; base-uri 'self'; frame-ancestors 'none'",
+      "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-src https://accounts.google.com; base-uri 'self'; frame-ancestors 'none'",
     "Cross-Origin-Resource-Policy": "same-origin",
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
@@ -272,7 +374,36 @@ async function handleRequest(req, res) {
     });
   }
 
+  if (url.pathname === "/api/google-lookup" && req.method === "POST") {
+    if (!rateLimit(req)) {
+      return sendJson(req, res, 429, { error: "Too many attempts. Please try again later." });
+    }
+
+    try {
+      const body = await readBody(req);
+      const payload = JSON.parse(body || "{}");
+      const googleUser = await verifyGoogleCredential(payload.credential);
+      const match = lookup(googleUser.email);
+      if (!match) {
+        return sendJson(req, res, 404, {
+          error: "No grade record was found for your UCLA Google account."
+        });
+      }
+
+      return sendJson(req, res, 200, {
+        grades: match.grades,
+        matchedBy: "UCLA Google account"
+      });
+    } catch (error) {
+      return sendJson(req, res, 401, { error: error.message || "Google Sign-In failed." });
+    }
+  }
+
   if (url.pathname === "/api/lookup" && req.method === "POST") {
+    if (!allowManualLookup) {
+      return sendJson(req, res, 403, { error: "Manual lookup is disabled. Please use Google Sign-In." });
+    }
+
     if (!rateLimit(req)) {
       return sendJson(req, res, 429, { error: "Too many attempts. Please try again later." });
     }

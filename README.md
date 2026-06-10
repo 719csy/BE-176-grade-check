@@ -30,25 +30,32 @@ The GitHub Pages URL can host the lookup form, but the form must call a separate
 
 This project has no runtime npm dependencies. Many Node hosts will still run `npm start` automatically.
 
-## Connect GitHub Pages To The API
+## Connect GitHub Pages To The API And Google Sign-In
 
 1. Deploy the Node app (`server.js`) to a private backend host.
 2. Put the real CSV on that backend host, or in private mounted storage.
-3. Configure the backend environment:
+3. Create a Google OAuth Web Client ID in Google Cloud Console.
+   Add `https://719csy.github.io` to Authorized JavaScript origins.
+4. Configure the backend environment:
 
 ```bash
 GRADE_CSV_PATH=/private/path/to/grades.csv
 GRADE_CORS_ORIGIN=https://719csy.github.io
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_ALLOWED_DOMAINS=ucla.edu,g.ucla.edu
 PORT=3000
 ```
 
-4. In both `index.html` and `public/index.html`, set `grade-api-base` to the backend URL:
+5. In both `index.html` and `public/index.html`, set `grade-api-base` to the backend URL and `google-client-id` to the OAuth Client ID:
 
 ```html
 <meta name="grade-api-base" content="https://your-private-backend.example.com" />
+<meta name="google-client-id" content="your-client-id.apps.googleusercontent.com" />
 ```
 
 The backend URL must be HTTPS for the GitHub Pages frontend to call it from the browser.
+
+The browser sends Google's ID token to `/api/google-lookup`. The backend verifies the token signature, issuer, audience, expiry, verified email, and UCLA hosted domain before matching the email against `SIS Login ID`.
 
 ## GitHub Repository
 
