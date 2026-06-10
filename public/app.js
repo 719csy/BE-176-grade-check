@@ -4,6 +4,12 @@ const message = document.querySelector("#form-message");
 const resultPanel = document.querySelector("#result-panel");
 const resultBody = document.querySelector("#result-body");
 const clearButton = document.querySelector("#clear-button");
+const apiBase = document.querySelector("meta[name='grade-api-base']")?.content.trim().replace(/\/$/, "") || "";
+
+function apiUrl(path) {
+  const cleanPath = path.replace(/^\//, "");
+  return apiBase ? `${apiBase}/${cleanPath}` : cleanPath;
+}
 
 function setMessage(text, isError = false) {
   message.textContent = text;
@@ -43,15 +49,16 @@ form.addEventListener("submit", async (event) => {
   resultBody.replaceChildren();
 
   try {
-    const response = await fetch("/api/lookup", {
+    const response = await fetch(apiUrl("api/lookup"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ identifier })
     });
 
-    const payload = await response.json();
+    const contentType = response.headers.get("content-type") || "";
+    const payload = contentType.includes("application/json") ? await response.json() : {};
     if (!response.ok) {
-      throw new Error(payload.error || "Unable to look up this record.");
+      throw new Error(payload.error || "Grade lookup service is not connected yet.");
     }
 
     renderResults(payload.grades);
