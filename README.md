@@ -26,6 +26,8 @@ Open `http://localhost:3000`.
 
 Do not deploy this as a GitHub Pages-only static site because static files are public to the browser. Deploy it to a Node-capable host and provide the CSV privately through server storage or environment-mounted storage.
 
+The GitHub Pages URL can host the lookup form, but the form must call a separate private Node API to return grade details safely.
+
 This project has no runtime npm dependencies. Many Node hosts will still run `npm start` automatically.
 
 ## GitHub Repository
