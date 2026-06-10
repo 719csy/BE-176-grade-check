@@ -7,6 +7,10 @@ loadEnvFile(path.join(__dirname, ".env"));
 const port = Number(process.env.PORT || 3000);
 const csvPath = path.resolve(process.env.GRADE_CSV_PATH || "./data/grades.csv");
 const publicDir = path.join(__dirname, "public");
+const allowedOrigins = (process.env.GRADE_CORS_ORIGIN || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 const LOOKUP_COLUMNS = {
   uid: "SIS User ID",
@@ -144,24 +148,39 @@ function lookup(identifier) {
   );
 }
 
-function sendJson(res, status, payload) {
+function sendJson(req, res, status, payload) {
   const body = JSON.stringify(payload);
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Content-Length": Buffer.byteLength(body),
-    ...securityHeaders()
+    ...securityHeaders(req)
   });
   res.end(body);
 }
 
-function securityHeaders() {
+function corsHeaders(req) {
+  const origin = req.headers.origin;
+  if (!origin || !allowedOrigins.includes(origin)) {
+    return {};
+  }
+
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    Vary: "Origin"
+  };
+}
+
+function securityHeaders(req = {}) {
   return {
     "Content-Security-Policy":
       "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; base-uri 'self'; frame-ancestors 'none'",
     "Cross-Origin-Resource-Policy": "same-origin",
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
-    "X-Frame-Options": "DENY"
+    "X-Frame-Options": "DENY",
+    ...corsHeaders(req)
   };
 }
 
@@ -207,14 +226,14 @@ function serveStatic(req, res) {
   const relativePath = path.relative(publicDir, filePath);
 
   if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
-    res.writeHead(403, securityHeaders());
+    res.writeHead(403, securityHeaders(req));
     res.end("Forbidden");
     return;
   }
 
   fs.readFile(filePath, (error, content) => {
     if (error) {
-      res.writeHead(404, securityHeaders());
+      res.writeHead(404, securityHeaders(req));
       res.end("Not found");
       return;
     }
@@ -230,7 +249,7 @@ function serveStatic(req, res) {
     res.writeHead(200, {
       "Content-Type": contentType,
       "Content-Length": content.length,
-      ...securityHeaders()
+      ...securityHeaders(req)
     });
     res.end(content);
   });
@@ -239,8 +258,14 @@ function serveStatic(req, res) {
 async function handleRequest(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
+  if (req.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
+    res.writeHead(204, securityHeaders(req));
+    res.end();
+    return;
+  }
+
   if (url.pathname === "/api/status" && req.method === "GET") {
-    return sendJson(res, 200, {
+    return sendJson(req, res, 200, {
       ok: true,
       loadedAt: loadedAt ? loadedAt.toISOString() : null,
       rowCount: gradeRows.length
@@ -249,7 +274,7 @@ async function handleRequest(req, res) {
 
   if (url.pathname === "/api/lookup" && req.method === "POST") {
     if (!rateLimit(req)) {
-      return sendJson(res, 429, { error: "Too many attempts. Please try again later." });
+      return sendJson(req, res, 429, { error: "Too many attempts. Please try again later." });
     }
 
     try {
@@ -257,20 +282,20 @@ async function handleRequest(req, res) {
       const payload = JSON.parse(body || "{}");
       const identifier = payload.identifier;
       if (typeof identifier !== "string" || identifier.trim().length < 3) {
-        return sendJson(res, 400, { error: "Please enter a valid UID or SIS login email." });
+        return sendJson(req, res, 400, { error: "Please enter a valid UID or SIS login email." });
       }
 
       const match = lookup(identifier);
       if (!match) {
-        return sendJson(res, 404, { error: "No matching record was found." });
+        return sendJson(req, res, 404, { error: "No matching record was found." });
       }
 
-      return sendJson(res, 200, {
+      return sendJson(req, res, 200, {
         grades: match.grades,
         matchedBy: normalize(identifier).includes("@") ? "SIS Login ID" : "SIS User ID"
       });
     } catch (error) {
-      return sendJson(res, 400, { error: "Invalid lookup request." });
+      return sendJson(req, res, 400, { error: "Invalid lookup request." });
     }
   }
 
@@ -278,7 +303,7 @@ async function handleRequest(req, res) {
     return serveStatic(req, res);
   }
 
-  return sendJson(res, 405, { error: "Method not allowed." });
+  return sendJson(req, res, 405, { error: "Method not allowed." });
 }
 
 try {
